@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - codex/core-186-openchatcut-build
+      - codex/core-187-openchatcut-update
   workflow_dispatch:
 
 permissions:
@@ -14,6 +15,8 @@ jobs:
   build:
     runs-on: macos-15
     timeout-minutes: 25
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -56,3 +59,18 @@ jobs:
           name: openchatcut-web-darwin-arm64-${{ github.sha }}
           path: ${{ runner.temp }}/openchatcut-web-darwin-arm64.tar.gz
           if-no-files-found: error
+
+      - name: Publish a verified deployment package
+        if: github.repository == 'imagepit/OpenChatCut' && github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'codex/core-187-openchatcut-update')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prefix=openchatcut-web-
+          if [[ "$GITHUB_REF_NAME" != main ]]; then prefix=openchatcut-web-test-; fi
+          tag="${prefix}$GITHUB_SHA"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            exit 0
+          fi
+          gh release create "$tag" "$RUNNER_TEMP/openchatcut-web-darwin-arm64.tar.gz" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "OpenChatCut Web $GITHUB_SHA" --prerelease --notes "Verified macOS arm64 Web build."

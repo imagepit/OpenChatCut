@@ -52,6 +52,7 @@ export function rememberPort(port: number, location: EmbeddedPortLocation = {}):
 export interface ListenWithAffinityOptions extends EmbeddedPortLocation {
   /** Overridable for tests; the real server always uses the documented port. */
   readonly canonicalPort?: number;
+  readonly strictPort?: boolean;
   readonly log?: (message: string) => void;
 }
 
@@ -65,7 +66,7 @@ export interface ListenWithAffinityOptions extends EmbeddedPortLocation {
  */
 export async function listenWithAffinity(
   server: Server,
-  { canonicalPort = CANONICAL_EMBEDDED_PORT, home, profileId, log = console.warn }: ListenWithAffinityOptions = {},
+  { canonicalPort = CANONICAL_EMBEDDED_PORT, strictPort, home, profileId, log = console.warn }: ListenWithAffinityOptions = {},
 ): Promise<number> {
   const listenOn = (port: number) => new Promise<number>((resolvePort, reject) => {
     const onError = (err: Error) => reject(err);
@@ -78,6 +79,8 @@ export async function listenWithAffinity(
     });
   });
   const inUse = (err: unknown): boolean => (err as NodeJS.ErrnoException).code === 'EADDRINUSE';
+
+  if (strictPort) return listenOn(canonicalPort);
 
   const remembered = readRememberedPort({ home, profileId });
   if (remembered !== null) {

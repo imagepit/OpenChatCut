@@ -72,7 +72,7 @@ export function mountAssemblyAiProxy(
   app.use('/assemblyai', proxyMiddleware(route));
 }
 
-export async function startEmbeddedServer(distDir: string): Promise<EmbeddedServer> {
+export async function startEmbeddedServer(distDir: string, canonicalPort?: number): Promise<EmbeddedServer> {
   // Product files (fonts, voice samples, LUTs, …) live in resources/dist when packaged.
   registerProductAssetRoot(distDir);
   await seedFromEnvLocal();
@@ -114,7 +114,7 @@ export async function startEmbeddedServer(distDir: string): Promise<EmbeddedServ
   const profile = runtimeProfile();
   const port = await listenWithAffinity(
     server,
-    profile.mode === 'isolated-dev' ? { profileId: profile.id } : {},
+    { canonicalPort, strictPort: canonicalPort !== undefined, ...(profile.mode === 'isolated-dev' ? { profileId: profile.id } : {}) },
   );
   return { server, port, origin: `http://127.0.0.1:${port}` };
 }

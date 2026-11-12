@@ -1,0 +1,58 @@
+name: IMAGEPIT macOS Web build
+
+on:
+  push:
+    branches:
+      - main
+      - codex/core-186-openchatcut-build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.22.3
+          cache: npm
+      - run: test "$(uname -m)" = arm64
+      - run: npm ci --no-audit --no-fund
+      - name: Build Web editor
+        run: |
+          node scripts/sync-shader-sources.mjs --check
+          npm run sync:mediapipe
+          npm run verify:server-tool-catalog
+          npm --ignore-scripts run build
+      - name: Verify bundled editor starts
+        run: |
+          export OPENCHATCUT_DATA_DIR="$RUNNER_TEMP/openchatcut-smoke"
+          mkdir -p "$OPENCHATCUT_DATA_DIR"
+          node --import tsx scripts/start-web.mjs > "$RUNNER_TEMP/openchatcut.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          if ! curl --retry 12 --retry-delay 1 --retry-connrefused --fail --silent --show-error \
+            http://127.0.0.1:5199/ > "$RUNNER_TEMP/openchatcut-index.html"; then
+            cat "$RUNNER_TEMP/openchatcut.log"
+            exit 1
+          fi
+          grep -F '<title>OpenChatCut</title>' "$RUNNER_TEMP/openchatcut-index.html"
+          grep -F '/assets/' "$RUNNER_TEMP/openchatcut-index.html"
+      - name: Package the build and its runtime source
+        run: |
+          release_dir="$RUNNER_TEMP/openchatcut-web"
+          mkdir -p "$release_dir"
+          git archive "$GITHUB_SHA" | tar -xf - -C "$release_dir"
+          cp -R dist "$release_dir/dist"
+          printf '%s\n' "$GITHUB_SHA" > "$release_dir/BUILD_COMMIT"
+          tar -czf "$RUNNER_TEMP/openchatcut-web-darwin-arm64.tar.gz" \
+            -C "$RUNNER_TEMP" openchatcut-web
+      - uses: actions/upload-artifact@v7
+        with:
+          name: openchatcut-web-darwin-arm64-${{ github.sha }}
+          path: ${{ runner.temp }}/openchatcut-web-darwin-arm64.tar.gz
+          if-no-files-found: error

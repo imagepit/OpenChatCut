@@ -31,6 +31,7 @@ jobs:
           npm run sync:mediapipe
           npm run verify:server-tool-catalog
           npm --ignore-scripts run build
+          printf '{"commit":"%s"}\n' "$GITHUB_SHA" > dist/build-info.json
       - name: Verify bundled editor starts
         run: |
           export OPENCHATCUT_DATA_DIR="$RUNNER_TEMP/openchatcut-smoke"
@@ -45,6 +46,8 @@ jobs:
           fi
           grep -F '<title>OpenChatCut</title>' "$RUNNER_TEMP/openchatcut-index.html"
           grep -F '/assets/' "$RUNNER_TEMP/openchatcut-index.html"
+          curl --fail --silent --show-error http://127.0.0.1:5199/build-info.json |
+            jq -e --arg commit "$GITHUB_SHA" '.commit == $commit'
       - name: Package the build and its runtime source
         run: |
           release_dir="$RUNNER_TEMP/openchatcut-web"
